@@ -1,0 +1,15 @@
+{
+  "name": "healthcare-system",
+  "version": "1.0.0",
+  "description": "Healthcare Management System",
+  "scripts": {
+    "install-all": "cd auth-service && npm install && cd ../patient-service && npm install && cd ../frontend && npm install",
+    "start": "concurrently \"npm run start-auth\" \"npm run start-patient\" \"npm run start-frontend\"",
+    "start-auth": "cd auth-service && node index.js",
+    "start-patient": "cd patient-service && node index.js",
+    "start-frontend": "cd frontend && npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
