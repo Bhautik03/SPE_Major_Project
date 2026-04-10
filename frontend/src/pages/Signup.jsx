@@ -5,14 +5,13 @@ import { authApi } from '../api';
 export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('user'); // Admin usually wouldn't sign up directly, but keeping it for demo
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleSignup = async (e) => {
     e.preventDefault();
     try {
-      const res = await authApi.post('/auth/signup', { email, password, role });
+      const res = await authApi.post('/auth/signup', { email, password });
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
       navigate('/dashboard');
@@ -47,13 +46,6 @@ export default function Signup() {
               onChange={(e) => setPassword(e.target.value)}
               required 
             />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Role</label>
-            <select className="form-input" value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
-            </select>
           </div>
           <button type="submit" className="btn btn-primary" style={{ width: '100%', marginBottom: '1rem' }}>
             Sign Up

@@ -1,6 +1,6 @@
 const express = require('express');
 const Patient = require('../models/Patient');
-const { authMiddleware, adminMiddleware } = require('../middleware/auth');
+const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -36,7 +36,7 @@ router.post('/', async (req, res) => {
     gender: req.body.gender,
     contact: req.body.contact,
     address: req.body.address,
-    medicalHistory: req.body.medicalHistory
+    medicalHistory: req.body.newMedicalHistory ? [{ details: req.body.newMedicalHistory }] : []
   });
 
   try {
@@ -65,7 +65,11 @@ router.put('/:id', async (req, res) => {
     if (req.body.gender != null) patient.gender = req.body.gender;
     if (req.body.contact != null) patient.contact = req.body.contact;
     if (req.body.address != null) patient.address = req.body.address;
-    if (req.body.medicalHistory != null) patient.medicalHistory = req.body.medicalHistory;
+    
+    // Append new medical history if provided
+    if (req.body.newMedicalHistory) {
+      patient.medicalHistory.push({ details: req.body.newMedicalHistory });
+    }
 
     const updatedPatient = await patient.save();
     res.json(updatedPatient);
@@ -74,7 +78,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE a patient
+// Delete patient (previously admin only)
 router.delete('/:id', async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);

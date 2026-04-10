@@ -1,66 +1,56 @@
-# ======================
-# Node modules
-# ======================
+# Node modules (all services)
 node_modules/
 
-# ======================
-# Environment variables
-# ======================
+# Environment files (NEVER push secrets)
 .env
-.env.*
+.env.local
+.env.*.local
+.env.production
+*.env
 
-# ======================
+# Build outputs
+dist/
+dist-ssr/
+build/
+out/
+frontend/dist/
+frontend/build/
+
 # Logs
-# ======================
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# ======================
-# Build folders
-# ======================
-dist/
-build/
-out/
-
-# ======================
-# Vite / React
-# ======================
-frontend/node_modules/
-frontend/dist/
-
-# ======================
-# OS files
-# ======================
-.DS_Store
-Thumbs.db
-
-# ======================
-# IDE / Editor files
-# ======================
-.vscode/
-.idea/
-
-# ======================
-# Temporary files
-# ======================
-*.tmp
-*.temp
-
-# ======================
-# Coverage (testing)
-# ======================
+# Testing / Coverage
 coverage/
 
-# ======================
-# Docker (optional)
-# ======================
+# IDE / Editor folders
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+# Docker / Database
+data/db/
+docker-volume/
 *.pid
 *.seed
+*.wt
+*.lock
 
-# ======================
-# MongoDB (if local files exist)
-# ======================
-data/
+# Temporary files
+*.tmp
+*.temp

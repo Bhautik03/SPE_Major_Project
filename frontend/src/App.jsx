@@ -26,7 +26,7 @@ function App() {
           {token ? (
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
               <span className="text-muted" style={{ fontSize: '0.875rem' }}>
-                {user?.email} ({user?.role})
+                {user?.email}
               </span>
               <button className="btn btn-outline" style={{ padding: '0.5rem 1rem' }} onClick={handleLogout}>
                 Logout
