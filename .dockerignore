@@ -1,0 +1,14 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+*.md
+.env
+auth-service/.env
+patient-service/.env
+frontend/.env
+frontend/dist
+frontend/build
+frontend/node_modules
+auth-service/node_modules
+patient-service/node_modules
