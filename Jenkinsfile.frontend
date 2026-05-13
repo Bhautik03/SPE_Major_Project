@@ -55,6 +55,7 @@ pipeline {
                     sh """
                         docker build -t ${env.IMAGE_FRONTEND}:${env.TAG} ./frontend
                         docker tag  ${env.IMAGE_FRONTEND}:${env.TAG} ${env.IMAGE_FRONTEND}:latest
+                        docker inspect ${env.IMAGE_FRONTEND}:${env.TAG} > /dev/null || (echo 'FRONTEND image missing!' && exit 1)
                     """
                 }
             }
@@ -66,8 +67,10 @@ pipeline {
                     docker run --rm \
                         -v /var/run/docker.sock:/var/run/docker.sock \
                         aquasec/trivy:latest image \
+                        --image-src docker \
                         --severity CRITICAL,HIGH \
                         --no-progress --exit-code 0 \
+                        --timeout 10m \
                         ${env.IMAGE_FRONTEND}:${env.TAG}
                 """
             }

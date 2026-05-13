@@ -69,6 +69,7 @@ pipeline {
                     sh """
                         docker build -t ${env.IMAGE_PATIENT}:${env.TAG} ./patient-service
                         docker tag  ${env.IMAGE_PATIENT}:${env.TAG} ${env.IMAGE_PATIENT}:latest
+                        docker inspect ${env.IMAGE_PATIENT}:${env.TAG} > /dev/null || (echo 'PATIENT image missing!' && exit 1)
                     """
                 }
             }
@@ -80,8 +81,10 @@ pipeline {
                     docker run --rm \
                         -v /var/run/docker.sock:/var/run/docker.sock \
                         aquasec/trivy:latest image \
+                        --image-src docker \
                         --severity CRITICAL,HIGH \
                         --no-progress --exit-code 0 \
+                        --timeout 10m \
                         ${env.IMAGE_PATIENT}:${env.TAG}
                 """
             }

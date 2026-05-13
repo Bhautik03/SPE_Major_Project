@@ -64,18 +64,20 @@ pipeline {
             steps {
                 script {
                     echo "Building and tagging images for all services..."
-                    sh """
-                        docker build -t ${env.IMAGE_AUTH}:${env.TAG} ./auth-service
-                        docker tag  ${env.IMAGE_AUTH}:${env.TAG} ${env.IMAGE_AUTH}:latest
-                    """
-                    sh """
-                        docker build -t ${env.IMAGE_PATIENT}:${env.TAG} ./patient-service
-                        docker tag  ${env.IMAGE_PATIENT}:${env.TAG} ${env.IMAGE_PATIENT}:latest
-                    """
-                    sh """
-                        docker build -t ${env.IMAGE_FRONTEND}:${env.TAG} ./frontend
-                        docker tag  ${env.IMAGE_FRONTEND}:${env.TAG} ${env.IMAGE_FRONTEND}:latest
-                    """
+                    sh "docker build -t ${env.IMAGE_AUTH}:${env.TAG} ./auth-service"
+                    sh "docker tag  ${env.IMAGE_AUTH}:${env.TAG} ${env.IMAGE_AUTH}:latest"
+                    sh "docker inspect ${env.IMAGE_AUTH}:${env.TAG} > /dev/null || (echo 'AUTH image missing!' && exit 1)"
+
+                    sh "docker build -t ${env.IMAGE_PATIENT}:${env.TAG} ./patient-service"
+                    sh "docker tag  ${env.IMAGE_PATIENT}:${env.TAG} ${env.IMAGE_PATIENT}:latest"
+                    sh "docker inspect ${env.IMAGE_PATIENT}:${env.TAG} > /dev/null || (echo 'PATIENT image missing!' && exit 1)"
+
+                    sh "docker build -t ${env.IMAGE_FRONTEND}:${env.TAG} ./frontend"
+                    sh "docker tag  ${env.IMAGE_FRONTEND}:${env.TAG} ${env.IMAGE_FRONTEND}:latest"
+                    sh "docker inspect ${env.IMAGE_FRONTEND}:${env.TAG} > /dev/null || (echo 'FRONTEND image missing!' && exit 1)"
+
+                    echo "All 3 images built successfully:"
+                    sh "docker images | grep -E '${env.IMAGE_AUTH}|${env.IMAGE_PATIENT}|${env.IMAGE_FRONTEND}'"
                 }
             }
         }
@@ -85,19 +87,40 @@ pipeline {
                 script {
                     echo "Running Trivy vulnerability scan on all images..."
                     sh """
-                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-                            aquasec/trivy:latest image --severity CRITICAL,HIGH \
-                            --no-progress --exit-code 0 ${env.IMAGE_AUTH}:${env.TAG}
+                        docker run --rm \
+                            -v /var/run/docker.sock:/var/run/docker.sock \
+                            -e DOCKER_HOST=unix:///var/run/docker.sock \
+                            aquasec/trivy:latest image \
+                            --image-src docker \
+                            --severity CRITICAL,HIGH \
+                            --no-progress \
+                            --exit-code 0 \
+                            --timeout 10m \
+                            ${env.IMAGE_AUTH}:${env.TAG}
                     """
                     sh """
-                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-                            aquasec/trivy:latest image --severity CRITICAL,HIGH \
-                            --no-progress --exit-code 0 ${env.IMAGE_PATIENT}:${env.TAG}
+                        docker run --rm \
+                            -v /var/run/docker.sock:/var/run/docker.sock \
+                            -e DOCKER_HOST=unix:///var/run/docker.sock \
+                            aquasec/trivy:latest image \
+                            --image-src docker \
+                            --severity CRITICAL,HIGH \
+                            --no-progress \
+                            --exit-code 0 \
+                            --timeout 10m \
+                            ${env.IMAGE_PATIENT}:${env.TAG}
                     """
                     sh """
-                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-                            aquasec/trivy:latest image --severity CRITICAL,HIGH \
-                            --no-progress --exit-code 0 ${env.IMAGE_FRONTEND}:${env.TAG}
+                        docker run --rm \
+                            -v /var/run/docker.sock:/var/run/docker.sock \
+                            -e DOCKER_HOST=unix:///var/run/docker.sock \
+                            aquasec/trivy:latest image \
+                            --image-src docker \
+                            --severity CRITICAL,HIGH \
+                            --no-progress \
+                            --exit-code 0 \
+                            --timeout 10m \
+                            ${env.IMAGE_FRONTEND}:${env.TAG}
                     """
                 }
             }
