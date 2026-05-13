@@ -84,7 +84,7 @@ pipeline {
         stage('Trivy Security Scan') {
             steps {
                 script {
-                    echo "Running Trivy vulnerability scan on all images..."
+                    echo "Running Trivy vulnerability scan on all images... "
 
                     // Save images to tar and scan via --input to avoid Docker socket namespace issues
                     sh """
