@@ -37,13 +37,14 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'env-file', variable: 'ENV_FILE')]) {
                     script {
-                        def props = readProperties file: ENV_FILE
-
-                        env.DOCKER_CRED_ID   = props.DOCKER_CRED_ID
-                        env.IMAGE_AUTH        = props.IMAGE_AUTH
-                        env.JWT_SECRET        = props.JWT_SECRET
-                        env.GOOGLE_CLIENT_ID  = props.GOOGLE_CLIENT_ID
-                        env.NOTIFY_EMAIL      = props.NOTIFY_EMAIL
+                        def fileContent = readFile(ENV_FILE)
+                        fileContent.split('\n').each { line ->
+                            line = line.trim()
+                            if (line && !line.startsWith('#') && line.contains('=')) {
+                                def parts = line.split('=', 2)
+                                env[parts[0].trim()] = parts[1].trim()
+                            }
+                        }
 
                         if (!env.IMAGE_AUTH)    error "IMAGE_AUTH is missing from env-file"
                         if (!env.JWT_SECRET)    error "JWT_SECRET is missing from env-file"

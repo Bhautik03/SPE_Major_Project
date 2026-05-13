@@ -37,11 +37,14 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'env-file', variable: 'ENV_FILE')]) {
                     script {
-                        def props = readProperties file: ENV_FILE
-
-                        env.DOCKER_CRED_ID   = props.DOCKER_CRED_ID
-                        env.IMAGE_FRONTEND    = props.IMAGE_FRONTEND
-                        env.NOTIFY_EMAIL      = props.NOTIFY_EMAIL
+                        def fileContent = readFile(ENV_FILE)
+                        fileContent.split('\n').each { line ->
+                            line = line.trim()
+                            if (line && !line.startsWith('#') && line.contains('=')) {
+                                def parts = line.split('=', 2)
+                                env[parts[0].trim()] = parts[1].trim()
+                            }
+                        }
 
                         if (!env.IMAGE_FRONTEND) error "IMAGE_FRONTEND is missing from env-file"
 

@@ -20,16 +20,15 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'env-file', variable: 'ENV_FILE')]) {
                     script {
-                        def props = readProperties file: ENV_FILE
-
-                        env.DOCKER_USER_REPO  = props.DOCKER_USER_REPO
-                        env.DOCKER_CRED_ID    = props.DOCKER_CRED_ID
-                        env.IMAGE_AUTH        = props.IMAGE_AUTH
-                        env.IMAGE_PATIENT     = props.IMAGE_PATIENT
-                        env.IMAGE_FRONTEND    = props.IMAGE_FRONTEND
-                        env.JWT_SECRET        = props.JWT_SECRET
-                        env.GOOGLE_CLIENT_ID  = props.GOOGLE_CLIENT_ID
-                        env.NOTIFY_EMAIL      = props.NOTIFY_EMAIL
+                        // Manual parsing - no plugin needed
+                        def fileContent = readFile(ENV_FILE)
+                        fileContent.split('\n').each { line ->
+                            line = line.trim()
+                            if (line && !line.startsWith('#') && line.contains('=')) {
+                                def parts = line.split('=', 2)
+                                env[parts[0].trim()] = parts[1].trim()
+                            }
+                        }
 
                         if (!env.DOCKER_USER_REPO) error "DOCKER_USER_REPO is missing from env-file"
                         if (!env.DOCKER_CRED_ID)   error "DOCKER_CRED_ID is missing from env-file"
