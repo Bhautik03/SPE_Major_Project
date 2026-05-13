@@ -53,4 +53,4 @@ docker-volume/
 
 # Temporary files
 *.tmp
-*.temp
+*.temp.env.jenkins

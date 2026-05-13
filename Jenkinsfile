@@ -1,15 +1,47 @@
 pipeline {
     agent any
 
+    options {
+        skipDefaultCheckout(true)
+    }
+
     environment {
-        DOCKER_USER_REPO = 'bhautik03'
-        DOCKER_CRED_ID = 'dockerhub-creds'
+        TAG = "${BUILD_NUMBER}"
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                checkout scm
+                retry(3) { checkout scm }
+            }
+        }
+
+        stage('Load Env') {
+            steps {
+                withCredentials([file(credentialsId: 'env-file', variable: 'ENV_FILE')]) {
+                    script {
+                        def props = readProperties file: ENV_FILE
+
+                        env.DOCKER_USER_REPO  = props.DOCKER_USER_REPO
+                        env.DOCKER_CRED_ID    = props.DOCKER_CRED_ID
+                        env.IMAGE_AUTH        = props.IMAGE_AUTH
+                        env.IMAGE_PATIENT     = props.IMAGE_PATIENT
+                        env.IMAGE_FRONTEND    = props.IMAGE_FRONTEND
+                        env.JWT_SECRET        = props.JWT_SECRET
+                        env.GOOGLE_CLIENT_ID  = props.GOOGLE_CLIENT_ID
+                        env.NOTIFY_EMAIL      = props.NOTIFY_EMAIL
+
+                        if (!env.DOCKER_USER_REPO) error "DOCKER_USER_REPO is missing from env-file"
+                        if (!env.DOCKER_CRED_ID)   error "DOCKER_CRED_ID is missing from env-file"
+                        if (!env.IMAGE_AUTH)        error "IMAGE_AUTH is missing from env-file"
+                        if (!env.JWT_SECRET)        error "JWT_SECRET is missing from env-file"
+
+                        echo "Docker User   : ${env.DOCKER_USER_REPO}"
+                        echo "Auth Image    : ${env.IMAGE_AUTH}:${env.TAG}"
+                        echo "Patient Image : ${env.IMAGE_PATIENT}:${env.TAG}"
+                        echo "Frontend Image: ${env.IMAGE_FRONTEND}:${env.TAG}"
+                    }
+                }
             }
         }
 
@@ -17,7 +49,6 @@ pipeline {
             steps {
                 script {
                     echo "Running unit tests for all services..."
-                    // Run tests inside a Node container to avoid local dependency issues
                     sh """
                         docker run --rm -v \$(pwd)/auth-service:/app -w /app node:20-alpine \
                           sh -c "npm install && npm test"
@@ -34,23 +65,17 @@ pipeline {
             steps {
                 script {
                     echo "Building and tagging images for all services..."
-
-                    // Auth Service
                     sh """
-                        docker build -t ${DOCKER_USER_REPO}/healthcare-auth:${BUILD_NUMBER} ./auth-service
-                        docker tag ${DOCKER_USER_REPO}/healthcare-auth:${BUILD_NUMBER} ${DOCKER_USER_REPO}/healthcare-auth:latest
+                        docker build -t ${env.IMAGE_AUTH}:${env.TAG} ./auth-service
+                        docker tag  ${env.IMAGE_AUTH}:${env.TAG} ${env.IMAGE_AUTH}:latest
                     """
-
-                    // Patient Service
                     sh """
-                        docker build -t ${DOCKER_USER_REPO}/healthcare-patient:${BUILD_NUMBER} ./patient-service
-                        docker tag ${DOCKER_USER_REPO}/healthcare-patient:${BUILD_NUMBER} ${DOCKER_USER_REPO}/healthcare-patient:latest
+                        docker build -t ${env.IMAGE_PATIENT}:${env.TAG} ./patient-service
+                        docker tag  ${env.IMAGE_PATIENT}:${env.TAG} ${env.IMAGE_PATIENT}:latest
                     """
-
-                    // Frontend Service
                     sh """
-                        docker build -t ${DOCKER_USER_REPO}/healthcare-frontend:${BUILD_NUMBER} ./frontend
-                        docker tag ${DOCKER_USER_REPO}/healthcare-frontend:${BUILD_NUMBER} ${DOCKER_USER_REPO}/healthcare-frontend:latest
+                        docker build -t ${env.IMAGE_FRONTEND}:${env.TAG} ./frontend
+                        docker tag  ${env.IMAGE_FRONTEND}:${env.TAG} ${env.IMAGE_FRONTEND}:latest
                     """
                 }
             }
@@ -60,61 +85,50 @@ pipeline {
             steps {
                 script {
                     echo "Running Trivy vulnerability scan on all images..."
-                    sh """
-                        docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            aquasec/trivy:latest image \
-                            --severity CRITICAL,HIGH \
-                            --no-progress \
-                            --exit-code 0 \
-                            ${DOCKER_USER_REPO}/healthcare-auth:${BUILD_NUMBER}
-                    """
-                    sh """
-                        docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            aquasec/trivy:latest image \
-                            --severity CRITICAL,HIGH \
-                            --no-progress \
-                            --exit-code 0 \
-                            ${DOCKER_USER_REPO}/healthcare-patient:${BUILD_NUMBER}
-                    """
-                    sh """
-                        docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            aquasec/trivy:latest image \
-                            --severity CRITICAL,HIGH \
-                            --no-progress \
-                            --exit-code 0 \
-                            ${DOCKER_USER_REPO}/healthcare-frontend:${BUILD_NUMBER}
-                    """
+                    ["${env.IMAGE_AUTH}", "${env.IMAGE_PATIENT}", "${env.IMAGE_FRONTEND}"].each { img ->
+                        sh """
+                            docker run --rm \
+                                -v /var/run/docker.sock:/var/run/docker.sock \
+                                aquasec/trivy:latest image \
+                                --severity CRITICAL,HIGH \
+                                --no-progress \
+                                --exit-code 0 \
+                                ${img}:${env.TAG}
+                        """
+                    }
                 }
             }
         }
 
         stage('Push Docker Images') {
             steps {
+                withCredentials([usernamePassword(
+                    credentialsId: "${env.DOCKER_CRED_ID}",
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    script {
+                        retry(3) {
+                            sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+                        }
+                        ["${env.IMAGE_AUTH}", "${env.IMAGE_PATIENT}", "${env.IMAGE_FRONTEND}"].each { img ->
+                            retry(3) { sh "docker push ${img}:${env.TAG}" }
+                            retry(3) { sh "docker push ${img}:latest" }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Cleanup Old Images') {
+            steps {
                 script {
-                    echo "Logging into Docker Hub and pushing images..."
-                    withCredentials([usernamePassword(
-                        credentialsId: "${DOCKER_CRED_ID}",
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )]) {
-                        sh '''
-                            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-
-                            # Push Auth
-                            docker push ${DOCKER_USER_REPO}/healthcare-auth:${BUILD_NUMBER}
-                            docker push ${DOCKER_USER_REPO}/healthcare-auth:latest
-
-                            # Push Patient
-                            docker push ${DOCKER_USER_REPO}/healthcare-patient:${BUILD_NUMBER}
-                            docker push ${DOCKER_USER_REPO}/healthcare-patient:latest
-
-                            # Push Frontend
-                            docker push ${DOCKER_USER_REPO}/healthcare-frontend:${BUILD_NUMBER}
-                            docker push ${DOCKER_USER_REPO}/healthcare-frontend:latest
-                        '''
+                    echo "Removing old image tags from Jenkins host..."
+                    ["${env.IMAGE_AUTH}", "${env.IMAGE_PATIENT}", "${env.IMAGE_FRONTEND}"].each { img ->
+                        sh """
+                            docker images "${img}" --format "{{.Repository}}:{{.Tag}}" \
+                                | grep -v "${env.TAG}" | grep -v "latest" | xargs -r docker rmi -f || true
+                        """
                     }
                 }
             }
@@ -124,17 +138,12 @@ pipeline {
             steps {
                 script {
                     echo "Starting Ansible deployment..."
-                    withCredentials([
-                        string(credentialsId: 'JWT_SECRET', variable: 'JWT_SECRET'),
-                        string(credentialsId: 'GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID')
-                    ]) {
-                        sh '''
-                            ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansible/inventory.ini ansible/deploy.yml \
-                            -e "jwt_secret=${JWT_SECRET}" \
-                            -e "google_client_id=${GOOGLE_CLIENT_ID}" \
-                            -e "tag=${BUILD_NUMBER}"
-                        '''
-                    }
+                    sh """
+                        ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansible/inventory.ini ansible/deploy.yml \
+                        -e "jwt_secret=${env.JWT_SECRET}" \
+                        -e "google_client_id=${env.GOOGLE_CLIENT_ID}" \
+                        -e "tag=${env.TAG}"
+                    """
                 }
             }
         }
@@ -144,42 +153,15 @@ pipeline {
         success {
             emailext (
                 subject: "SUCCESS: Build #${BUILD_NUMBER} - ${JOB_NAME}",
-                body: """
-BUILD SUCCESS !!!
-
-Job Name     : ${JOB_NAME}
-Build Number : ${BUILD_NUMBER}
-Build URL    : ${BUILD_URL}
-
-Stages Passed:
-  ✅ Unit Tests (auth-service, patient-service)
-  ✅ Build Docker Images
-  ✅ Trivy Security Scan
-  ✅ Push to Docker Hub
-  ✅ Ansible Deployment
-
-Images Pushed:
-  - ${DOCKER_USER_REPO}/healthcare-auth:${BUILD_NUMBER}
-  - ${DOCKER_USER_REPO}/healthcare-patient:${BUILD_NUMBER}
-  - ${DOCKER_USER_REPO}/healthcare-frontend:${BUILD_NUMBER}
-                """,
-                to: "bhautikv03@gmail.com"
+                body: "Build #${BUILD_NUMBER} completed successfully.",
+                to: "${env.NOTIFY_EMAIL}"
             )
         }
-
         failure {
             emailext (
                 subject: "FAILED: Build #${BUILD_NUMBER} - ${JOB_NAME}",
-                body: """
-BUILD FAILED !!!
-
-Job Name     : ${JOB_NAME}
-Build Number : ${BUILD_NUMBER}
-Check Logs   : ${BUILD_URL}
-
-Please review the error in the Jenkins console immediately.
-                """,
-                to: "bhautikv03@gmail.com"
+                body: "Build #${BUILD_NUMBER} failed. Check logs: ${BUILD_URL}",
+                to: "${env.NOTIFY_EMAIL}"
             )
         }
     }
