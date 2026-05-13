@@ -53,4 +53,11 @@ docker-volume/
 
 # Temporary files
 *.tmp
-*.temp.env.jenkins
+*.temp
+
+# Jenkins secret env files (NEVER push to GitHub)
+.env.jenkins
+.env.jenkins.*
+
+# Kubernetes secret manifest (contains plaintext credentials)
+k8s/01-secrets.yml
