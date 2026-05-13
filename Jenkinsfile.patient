@@ -37,14 +37,11 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'env-file', variable: 'ENV_FILE')]) {
                     script {
-                        def fileContent = readFile(ENV_FILE)
-                        fileContent.split('\n').each { line ->
-                            line = line.trim()
-                            if (line && !line.startsWith('#') && line.contains('=')) {
-                                def parts = line.split('=', 2)
-                                env[parts[0].trim()] = parts[1].trim()
-                            }
-                        }
+                        env.DOCKER_CRED_ID   = sh(script: "grep -m1 ^DOCKER_CRED_ID= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
+                        env.IMAGE_PATIENT    = sh(script: "grep -m1 ^IMAGE_PATIENT= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
+                        env.JWT_SECRET       = sh(script: "grep -m1 ^JWT_SECRET= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
+                        env.GOOGLE_CLIENT_ID = sh(script: "grep -m1 ^GOOGLE_CLIENT_ID= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
+                        env.NOTIFY_EMAIL     = sh(script: "grep -m1 ^NOTIFY_EMAIL= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
 
                         if (!env.IMAGE_PATIENT) error "IMAGE_PATIENT is missing from env-file"
                         if (!env.JWT_SECRET)    error "JWT_SECRET is missing from env-file"

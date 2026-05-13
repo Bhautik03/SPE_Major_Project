@@ -37,14 +37,9 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'env-file', variable: 'ENV_FILE')]) {
                     script {
-                        def fileContent = readFile(ENV_FILE)
-                        fileContent.split('\n').each { line ->
-                            line = line.trim()
-                            if (line && !line.startsWith('#') && line.contains('=')) {
-                                def parts = line.split('=', 2)
-                                env[parts[0].trim()] = parts[1].trim()
-                            }
-                        }
+                        env.DOCKER_CRED_ID  = sh(script: "grep -m1 ^DOCKER_CRED_ID= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
+                        env.IMAGE_FRONTEND  = sh(script: "grep -m1 ^IMAGE_FRONTEND= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
+                        env.NOTIFY_EMAIL    = sh(script: "grep -m1 ^NOTIFY_EMAIL= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
 
                         if (!env.IMAGE_FRONTEND) error "IMAGE_FRONTEND is missing from env-file"
 

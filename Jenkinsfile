@@ -20,15 +20,15 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'env-file', variable: 'ENV_FILE')]) {
                     script {
-                        // Manual parsing - no plugin needed
-                        def fileContent = readFile(ENV_FILE)
-                        fileContent.split('\n').each { line ->
-                            line = line.trim()
-                            if (line && !line.startsWith('#') && line.contains('=')) {
-                                def parts = line.split('=', 2)
-                                env[parts[0].trim()] = parts[1].trim()
-                            }
-                        }
+                        // Sandbox-safe: use sh+grep to extract each variable
+                        env.DOCKER_USER_REPO  = sh(script: "grep -m1 ^DOCKER_USER_REPO= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
+                        env.DOCKER_CRED_ID    = sh(script: "grep -m1 ^DOCKER_CRED_ID= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
+                        env.IMAGE_AUTH        = sh(script: "grep -m1 ^IMAGE_AUTH= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
+                        env.IMAGE_PATIENT     = sh(script: "grep -m1 ^IMAGE_PATIENT= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
+                        env.IMAGE_FRONTEND    = sh(script: "grep -m1 ^IMAGE_FRONTEND= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
+                        env.JWT_SECRET        = sh(script: "grep -m1 ^JWT_SECRET= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
+                        env.GOOGLE_CLIENT_ID  = sh(script: "grep -m1 ^GOOGLE_CLIENT_ID= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
+                        env.NOTIFY_EMAIL      = sh(script: "grep -m1 ^NOTIFY_EMAIL= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
 
                         if (!env.DOCKER_USER_REPO) error "DOCKER_USER_REPO is missing from env-file"
                         if (!env.DOCKER_CRED_ID)   error "DOCKER_CRED_ID is missing from env-file"
