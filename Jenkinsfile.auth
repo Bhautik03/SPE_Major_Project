@@ -75,22 +75,7 @@ pipeline {
             }
         }
 
-        stage('Trivy Scan') {
-            steps {
-                sh """
-                    docker save ${env.IMAGE_AUTH}:${env.TAG} -o /tmp/trivy-auth-${env.TAG}.tar
-                    docker run --rm \
-                        -v /tmp:/tmp \
-                        aquasec/trivy:latest image \
-                        --input /tmp/trivy-auth-${env.TAG}.tar \
-                        --severity CRITICAL,HIGH \
-                        --no-progress --exit-code 0 \
-                        --timeout 10m
-                    rm -f /tmp/trivy-auth-${env.TAG}.tar
-                """
-            }
-        }
-
+        // Push BEFORE Trivy so the image is guaranteed to exist in the daemon
         stage('Push Image') {
             steps {
                 withCredentials([usernamePassword(
@@ -106,6 +91,25 @@ pipeline {
                         retry(3) { sh "docker push ${env.IMAGE_AUTH}:latest" }
                     }
                 }
+            }
+        }
+
+        // Trivy reads from a workspace-local tar file; uses a named Docker volume
+        // for the DB cache so concurrent pipelines don't conflict on /tmp
+        stage('Trivy Scan') {
+            steps {
+                sh """
+                    docker save ${env.IMAGE_AUTH}:${env.TAG} -o trivy-scan-auth.tar
+                    docker run --rm \
+                        -v \$(pwd)/trivy-scan-auth.tar:/image.tar:ro \
+                        -v trivy-db-cache:/root/.cache/trivy \
+                        aquasec/trivy:latest image \
+                        --input /image.tar \
+                        --severity CRITICAL,HIGH \
+                        --no-progress --exit-code 0 \
+                        --timeout 10m
+                    rm -f trivy-scan-auth.tar
+                """
             }
         }
 

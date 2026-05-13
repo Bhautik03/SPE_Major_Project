@@ -81,54 +81,7 @@ pipeline {
             }
         }
 
-        stage('Trivy Security Scan') {
-            steps {
-                script {
-                    echo "Running Trivy vulnerability scan on all images..."
-
-                    // Save images to tar and scan via --input to avoid Docker socket namespace issues
-                    sh """
-                        docker save ${env.IMAGE_AUTH}:${env.TAG} -o /tmp/trivy-auth-${env.TAG}.tar
-                        docker run --rm \
-                            -v /tmp:/tmp \
-                            aquasec/trivy:latest image \
-                            --input /tmp/trivy-auth-${env.TAG}.tar \
-                            --severity CRITICAL,HIGH \
-                            --no-progress \
-                            --exit-code 0 \
-                            --timeout 10m
-                        rm -f /tmp/trivy-auth-${env.TAG}.tar
-                    """
-
-                    sh """
-                        docker save ${env.IMAGE_PATIENT}:${env.TAG} -o /tmp/trivy-patient-${env.TAG}.tar
-                        docker run --rm \
-                            -v /tmp:/tmp \
-                            aquasec/trivy:latest image \
-                            --input /tmp/trivy-patient-${env.TAG}.tar \
-                            --severity CRITICAL,HIGH \
-                            --no-progress \
-                            --exit-code 0 \
-                            --timeout 10m
-                        rm -f /tmp/trivy-patient-${env.TAG}.tar
-                    """
-
-                    sh """
-                        docker save ${env.IMAGE_FRONTEND}:${env.TAG} -o /tmp/trivy-frontend-${env.TAG}.tar
-                        docker run --rm \
-                            -v /tmp:/tmp \
-                            aquasec/trivy:latest image \
-                            --input /tmp/trivy-frontend-${env.TAG}.tar \
-                            --severity CRITICAL,HIGH \
-                            --no-progress \
-                            --exit-code 0 \
-                            --timeout 10m
-                        rm -f /tmp/trivy-frontend-${env.TAG}.tar
-                    """
-                }
-            }
-        }
-
+        // Push BEFORE Trivy so images are guaranteed to exist in the daemon
         stage('Push Docker Images') {
             steps {
                 withCredentials([usernamePassword(
@@ -147,6 +100,55 @@ pipeline {
                         retry(3) { sh "docker push ${env.IMAGE_FRONTEND}:${env.TAG}" }
                         retry(3) { sh "docker push ${env.IMAGE_FRONTEND}:latest" }
                     }
+                }
+            }
+        }
+
+        // Trivy reads workspace-local tar files; uses a named Docker volume for
+        // the DB cache so concurrent pipelines don't corrupt /tmp
+        stage('Trivy Security Scan') {
+            steps {
+                script {
+                    echo "Running Trivy vulnerability scan on all images..."
+
+                    sh """
+                        docker save ${env.IMAGE_AUTH}:${env.TAG} -o trivy-scan-auth.tar
+                        docker run --rm \
+                            -v \$(pwd)/trivy-scan-auth.tar:/image.tar:ro \
+                            -v trivy-db-cache:/root/.cache/trivy \
+                            aquasec/trivy:latest image \
+                            --input /image.tar \
+                            --severity CRITICAL,HIGH \
+                            --no-progress --exit-code 0 \
+                            --timeout 10m
+                        rm -f trivy-scan-auth.tar
+                    """
+
+                    sh """
+                        docker save ${env.IMAGE_PATIENT}:${env.TAG} -o trivy-scan-patient.tar
+                        docker run --rm \
+                            -v \$(pwd)/trivy-scan-patient.tar:/image.tar:ro \
+                            -v trivy-db-cache:/root/.cache/trivy \
+                            aquasec/trivy:latest image \
+                            --input /image.tar \
+                            --severity CRITICAL,HIGH \
+                            --no-progress --exit-code 0 \
+                            --timeout 10m
+                        rm -f trivy-scan-patient.tar
+                    """
+
+                    sh """
+                        docker save ${env.IMAGE_FRONTEND}:${env.TAG} -o trivy-scan-frontend.tar
+                        docker run --rm \
+                            -v \$(pwd)/trivy-scan-frontend.tar:/image.tar:ro \
+                            -v trivy-db-cache:/root/.cache/trivy \
+                            aquasec/trivy:latest image \
+                            --input /image.tar \
+                            --severity CRITICAL,HIGH \
+                            --no-progress --exit-code 0 \
+                            --timeout 10m
+                        rm -f trivy-scan-frontend.tar
+                    """
                 }
             }
         }
