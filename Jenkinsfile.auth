@@ -1,0 +1,93 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_USER_REPO = 'bhautik03'
+        DOCKER_CRED_ID   = 'dockerhub-creds'
+        TAG              = "${BUILD_NUMBER}"
+        SERVICE_NAME     = 'auth'
+        SERVICE_DIR      = 'auth-service'
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                retry(3) { checkout scm }
+            }
+        }
+
+        stage('Build Image') {
+            steps {
+                script {
+                    sh """
+                        docker build -t ${DOCKER_USER_REPO}/healthcare-${SERVICE_NAME}:${TAG} ./${SERVICE_DIR}
+                        docker tag ${DOCKER_USER_REPO}/healthcare-${SERVICE_NAME}:${TAG} \
+                                   ${DOCKER_USER_REPO}/healthcare-${SERVICE_NAME}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Push Image') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: "${DOCKER_CRED_ID}",
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push ${DOCKER_USER_REPO}/healthcare-${SERVICE_NAME}:${TAG}
+                        docker push ${DOCKER_USER_REPO}/healthcare-${SERVICE_NAME}:latest
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy via Ansible') {
+            steps {
+                withCredentials([
+                    string(credentialsId: 'JWT_SECRET',      variable: 'JWT_SECRET'),
+                    string(credentialsId: 'GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID')
+                ]) {
+                    sh """
+                        ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \\
+                          -i ansible/inventory.ini ansible/deploy.yml \\
+                          --tags "common,cleanup,backend" \\
+                          -e "jwt_secret=\${JWT_SECRET}" \\
+                          -e "google_client_id=\${GOOGLE_CLIENT_ID}" \\
+                          -e "tag=${TAG}"
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            emailext(
+                subject: "SUCCESS: Auth Service Build #${BUILD_NUMBER}",
+                body: """
+AUTH SERVICE DEPLOYED SUCCESSFULLY!
+
+Build Number : ${BUILD_NUMBER}
+Image        : ${DOCKER_USER_REPO}/healthcare-${SERVICE_NAME}:${TAG}
+Build URL    : ${BUILD_URL}
+                """,
+                to: "bhautikv03@gmail.com"
+            )
+        }
+        failure {
+            emailext(
+                subject: "FAILED: Auth Service Build #${BUILD_NUMBER}",
+                body: """
+AUTH SERVICE BUILD FAILED!
+
+Build Number : ${BUILD_NUMBER}
+Check Logs   : ${BUILD_URL}
+                """,
+                to: "bhautikv03@gmail.com"
+            )
+        }
+    }
+}

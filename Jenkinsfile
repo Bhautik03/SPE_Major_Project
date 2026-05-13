@@ -69,6 +69,26 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy via Ansible') {
+            steps {
+                script {
+                    echo "Starting Ansible deployment..."
+                    // Use Jenkins credentials to securely pass secrets into the Ansible playbook
+                    withCredentials([
+                        string(credentialsId: 'JWT_SECRET', variable: 'JWT_SECRET'),
+                        string(credentialsId: 'GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID')
+                    ]) {
+                        sh '''
+                            ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansible/inventory.ini ansible/deploy.yml \
+                            -e "jwt_secret=${JWT_SECRET}" \
+                            -e "google_client_id=${GOOGLE_CLIENT_ID}" \
+                            -e "tag=${BUILD_NUMBER}"
+                        '''
+                    }
+                }
+            }
+        }
     }
 
     post {

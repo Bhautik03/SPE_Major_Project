@@ -1,0 +1,19 @@
+---
+- name: Remove microservice containers
+  community.docker.docker_container:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - auth-service
+    - patient-service
+    - frontend
+  ignore_errors: yes
+
+- name: Remove old microservice images
+  shell: |
+    docker images "{{ docker_user }}/healthcare-{{ item }}" --format "{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}" | grep -v "{{ tag }}" | xargs -r docker rmi -f
+  loop:
+    - auth
+    - patient
+    - frontend
+  ignore_errors: yes

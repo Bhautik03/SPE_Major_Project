@@ -1,0 +1,17 @@
+---
+- name: Pull frontend image
+  community.docker.docker_image:
+    name: "{{ docker_user }}/healthcare-frontend:{{ tag }}"
+    source: pull
+
+- name: Run frontend container
+  community.docker.docker_container:
+    name: frontend
+    image: "{{ docker_user }}/healthcare-frontend:{{ tag }}"
+    state: started
+    recreate: yes
+    restart_policy: always
+    networks:
+      - name: "{{ app_network }}"
+    published_ports:
+      - "80:80"

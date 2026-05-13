@@ -1,0 +1,33 @@
+---
+- name: Set facts for backend services
+  set_fact:
+    backend_services:
+      - name: auth-service
+        port: 5001
+      - name: patient-service
+        port: 5002
+
+- name: Pull microservice images
+  community.docker.docker_image:
+    name: "{{ docker_user }}/healthcare-{{ item.name | regex_replace('-service', '') }}:{{ tag }}"
+    source: pull
+  loop: "{{ backend_services }}"
+
+- name: Run microservice containers
+  community.docker.docker_container:
+    name: "{{ item.name }}"
+    image: "{{ docker_user }}/healthcare-{{ item.name | regex_replace('-service', '') }}:{{ tag }}"
+    state: started
+    recreate: yes
+    restart_policy: always
+    networks:
+      - name: "{{ app_network }}"
+    published_ports:
+      - "{{ item.port }}:{{ item.port }}"
+    env:
+      PORT: "{{ item.port }}"
+      MONGODB_URI: "{{ mongo_uri }}"
+      JWT_SECRET: "{{ jwt_secret }}"
+      # Google client ID is currently only needed for auth, but harmless to pass to both
+      GOOGLE_CLIENT_ID: "{{ google_client_id }}"
+  loop: "{{ backend_services }}"

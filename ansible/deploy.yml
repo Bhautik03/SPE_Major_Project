@@ -1,0 +1,24 @@
+---
+- name: Deploy Healthcare Microservices System
+  hosts: healthcare_servers
+  become: false
+
+  vars:
+    # Notice: jwt_secret and google_client_id are expected via -e Extra Vars
+    docker_user: "bhautik03"
+    app_network: "healthcare-net"
+    mongo_uri: "mongodb://mongodb:27017/healthcare_sys"
+    # Fallback to latest tag if not provided
+    tag: "latest"
+
+  roles:
+    - role: common
+      tags: ['common']
+    - role: cleanup
+      tags: ['cleanup']
+    - role: database
+      tags: ['database']
+    - role: backend
+      tags: ['backend']
+    - role: frontend
+      tags: ['frontend']

@@ -1,0 +1,54 @@
+# ──────────────────────────────────────────────
+#  Namespace: auth
+# ──────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: auth
+  labels:
+    app: healthcare
+    tier: backend
+---
+# ──────────────────────────────────────────────
+#  Namespace: patient
+# ──────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: patient
+  labels:
+    app: healthcare
+    tier: backend
+---
+# ──────────────────────────────────────────────
+#  Namespace: frontend
+# ──────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: frontend
+  labels:
+    app: healthcare
+    tier: frontend
+---
+# ──────────────────────────────────────────────
+#  Namespace: database
+# ──────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: database
+  labels:
+    app: healthcare
+    tier: database
+---
+# ──────────────────────────────────────────────
+#  Namespace: monitoring
+# ──────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    app: healthcare
+    tier: monitoring

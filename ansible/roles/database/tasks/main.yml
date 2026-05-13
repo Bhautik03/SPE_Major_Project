@@ -1,0 +1,11 @@
+---
+- name: Run MongoDB container
+  community.docker.docker_container:
+    name: mongodb
+    image: mongo:latest
+    networks:
+      - name: "{{ app_network }}"
+    ports:
+      - "27017:27017"
+    restart_policy: always
+    state: started
