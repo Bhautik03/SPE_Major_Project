@@ -84,17 +84,21 @@ pipeline {
             steps {
                 script {
                     echo "Running Trivy vulnerability scan on all images..."
-                    ["${env.IMAGE_AUTH}", "${env.IMAGE_PATIENT}", "${env.IMAGE_FRONTEND}"].each { img ->
-                        sh """
-                            docker run --rm \
-                                -v /var/run/docker.sock:/var/run/docker.sock \
-                                aquasec/trivy:latest image \
-                                --severity CRITICAL,HIGH \
-                                --no-progress \
-                                --exit-code 0 \
-                                ${img}:${env.TAG}
-                        """
-                    }
+                    sh """
+                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+                            aquasec/trivy:latest image --severity CRITICAL,HIGH \
+                            --no-progress --exit-code 0 ${env.IMAGE_AUTH}:${env.TAG}
+                    """
+                    sh """
+                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+                            aquasec/trivy:latest image --severity CRITICAL,HIGH \
+                            --no-progress --exit-code 0 ${env.IMAGE_PATIENT}:${env.TAG}
+                    """
+                    sh """
+                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+                            aquasec/trivy:latest image --severity CRITICAL,HIGH \
+                            --no-progress --exit-code 0 ${env.IMAGE_FRONTEND}:${env.TAG}
+                    """
                 }
             }
         }
@@ -110,10 +114,12 @@ pipeline {
                         retry(3) {
                             sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
                         }
-                        ["${env.IMAGE_AUTH}", "${env.IMAGE_PATIENT}", "${env.IMAGE_FRONTEND}"].each { img ->
-                            retry(3) { sh "docker push ${img}:${env.TAG}" }
-                            retry(3) { sh "docker push ${img}:latest" }
-                        }
+                        retry(3) { sh "docker push ${env.IMAGE_AUTH}:${env.TAG}" }
+                        retry(3) { sh "docker push ${env.IMAGE_AUTH}:latest" }
+                        retry(3) { sh "docker push ${env.IMAGE_PATIENT}:${env.TAG}" }
+                        retry(3) { sh "docker push ${env.IMAGE_PATIENT}:latest" }
+                        retry(3) { sh "docker push ${env.IMAGE_FRONTEND}:${env.TAG}" }
+                        retry(3) { sh "docker push ${env.IMAGE_FRONTEND}:latest" }
                     }
                 }
             }
@@ -123,12 +129,18 @@ pipeline {
             steps {
                 script {
                     echo "Removing old image tags from Jenkins host..."
-                    ["${env.IMAGE_AUTH}", "${env.IMAGE_PATIENT}", "${env.IMAGE_FRONTEND}"].each { img ->
-                        sh """
-                            docker images "${img}" --format "{{.Repository}}:{{.Tag}}" \
-                                | grep -v "${env.TAG}" | grep -v "latest" | xargs -r docker rmi -f || true
-                        """
-                    }
+                    sh """
+                        docker images "${env.IMAGE_AUTH}" --format "{{.Repository}}:{{.Tag}}" \
+                            | grep -v "${env.TAG}" | grep -v "latest" | xargs -r docker rmi -f || true
+                    """
+                    sh """
+                        docker images "${env.IMAGE_PATIENT}" --format "{{.Repository}}:{{.Tag}}" \
+                            | grep -v "${env.TAG}" | grep -v "latest" | xargs -r docker rmi -f || true
+                    """
+                    sh """
+                        docker images "${env.IMAGE_FRONTEND}" --format "{{.Repository}}:{{.Tag}}" \
+                            | grep -v "${env.TAG}" | grep -v "latest" | xargs -r docker rmi -f || true
+                    """
                 }
             }
         }
