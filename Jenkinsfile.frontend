@@ -102,16 +102,13 @@ pipeline {
 
         stage('Deploy via Ansible') {
             steps {
-                withCredentials([file(credentialsId: 'env-file', variable: 'ENV_FILE')]) {
-                    script {
-                        def props = readProperties file: ENV_FILE
-                        sh """
-                            ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \\
-                              -i ansible/inventory.ini ansible/deploy.yml \\
-                              --tags "common,cleanup,frontend" \\
-                              -e "tag=${env.TAG}"
-                        """
-                    }
+                script {
+                    sh """
+                        ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \\
+                          -i ansible/inventory.ini ansible/deploy.yml \\
+                          --tags "common,cleanup,frontend" \\
+                          -e "tag=${env.TAG}"
+                    """
                 }
             }
         }
