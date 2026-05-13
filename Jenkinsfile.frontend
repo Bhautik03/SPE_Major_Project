@@ -1,12 +1,29 @@
 pipeline {
     agent any
 
+    options {
+        skipDefaultCheckout(true)
+    }
+
     environment {
-        DOCKER_USER_REPO = 'bhautik03'
-        DOCKER_CRED_ID   = 'dockerhub-creds'
-        TAG              = "${BUILD_NUMBER}"
-        SERVICE_NAME     = 'frontend'
-        SERVICE_DIR      = 'frontend'
+        TAG = "${BUILD_NUMBER}"
+    }
+
+    triggers {
+        GenericTrigger(
+            genericVariables: [
+                [key: 'MODIFIED_FILES', value: '$.commits[*].modified[*]'],
+                [key: 'ADDED_FILES',    value: '$.commits[*].added[*]'],
+                [key: 'REMOVED_FILES',  value: '$.commits[*].removed[*]']
+            ],
+            causeString: 'Triggered by frontend changes',
+            token: 'frontend-pipeline-token',
+            printContributedVariables: true,
+            printPostContent: true,
+            silentResponse: false,
+            regexpFilterText: '$MODIFIED_FILES $ADDED_FILES $REMOVED_FILES',
+            regexpFilterExpression: '.*frontend/.*'
+        )
     }
 
     stages {
@@ -16,48 +33,87 @@ pipeline {
             }
         }
 
+        stage('Load Env') {
+            steps {
+                withCredentials([file(credentialsId: 'env-file', variable: 'ENV_FILE')]) {
+                    script {
+                        def props = readProperties file: ENV_FILE
+
+                        env.DOCKER_CRED_ID   = props.DOCKER_CRED_ID
+                        env.IMAGE_FRONTEND    = props.IMAGE_FRONTEND
+                        env.NOTIFY_EMAIL      = props.NOTIFY_EMAIL
+
+                        if (!env.IMAGE_FRONTEND) error "IMAGE_FRONTEND is missing from env-file"
+
+                        echo "Frontend Image : ${env.IMAGE_FRONTEND}:${env.TAG}"
+                    }
+                }
+            }
+        }
+
         stage('Build Image') {
             steps {
                 script {
                     sh """
-                        docker build -t ${DOCKER_USER_REPO}/healthcare-${SERVICE_NAME}:${TAG} ./${SERVICE_DIR}
-                        docker tag ${DOCKER_USER_REPO}/healthcare-${SERVICE_NAME}:${TAG} \
-                                   ${DOCKER_USER_REPO}/healthcare-${SERVICE_NAME}:latest
+                        docker build -t ${env.IMAGE_FRONTEND}:${env.TAG} ./frontend
+                        docker tag  ${env.IMAGE_FRONTEND}:${env.TAG} ${env.IMAGE_FRONTEND}:latest
                     """
                 }
+            }
+        }
+
+        stage('Trivy Scan') {
+            steps {
+                sh """
+                    docker run --rm \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        aquasec/trivy:latest image \
+                        --severity CRITICAL,HIGH \
+                        --no-progress --exit-code 0 \
+                        ${env.IMAGE_FRONTEND}:${env.TAG}
+                """
             }
         }
 
         stage('Push Image') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: "${DOCKER_CRED_ID}",
+                    credentialsId: "${env.DOCKER_CRED_ID}",
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh '''
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker push ${DOCKER_USER_REPO}/healthcare-${SERVICE_NAME}:${TAG}
-                        docker push ${DOCKER_USER_REPO}/healthcare-${SERVICE_NAME}:latest
-                    '''
+                    script {
+                        retry(3) {
+                            sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+                        }
+                        retry(3) { sh "docker push ${env.IMAGE_FRONTEND}:${env.TAG}" }
+                        retry(3) { sh "docker push ${env.IMAGE_FRONTEND}:latest" }
+                    }
                 }
+            }
+        }
+
+        stage('Cleanup Old Images') {
+            steps {
+                sh """
+                    docker images "${env.IMAGE_FRONTEND}" --format "{{.Repository}}:{{.Tag}}" \
+                        | grep -v "${env.TAG}" | grep -v "latest" | xargs -r docker rmi -f || true
+                """
             }
         }
 
         stage('Deploy via Ansible') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'JWT_SECRET',      variable: 'JWT_SECRET'),
-                    string(credentialsId: 'GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID')
-                ]) {
-                    sh """
-                        ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \\
-                          -i ansible/inventory.ini ansible/deploy.yml \\
-                          --tags "common,cleanup,frontend" \\
-                          -e "jwt_secret=\${JWT_SECRET}" \\
-                          -e "google_client_id=\${GOOGLE_CLIENT_ID}" \\
-                          -e "tag=${TAG}"
-                    """
+                withCredentials([file(credentialsId: 'env-file', variable: 'ENV_FILE')]) {
+                    script {
+                        def props = readProperties file: ENV_FILE
+                        sh """
+                            ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \\
+                              -i ansible/inventory.ini ansible/deploy.yml \\
+                              --tags "common,cleanup,frontend" \\
+                              -e "tag=${env.TAG}"
+                        """
+                    }
                 }
             }
         }
@@ -65,28 +121,17 @@ pipeline {
 
     post {
         success {
-            emailext(
-                subject: "SUCCESS: Frontend Build #${BUILD_NUMBER}",
-                body: """
-FRONTEND DEPLOYED SUCCESSFULLY!
-
-Build Number : ${BUILD_NUMBER}
-Image        : ${DOCKER_USER_REPO}/healthcare-${SERVICE_NAME}:${TAG}
-Build URL    : ${BUILD_URL}
-                """,
-                to: "bhautikv03@gmail.com"
+            emailext (
+                subject: "SUCCESS: Build #${BUILD_NUMBER} - ${JOB_NAME}",
+                body: "Build #${BUILD_NUMBER} completed successfully.",
+                to: "${env.NOTIFY_EMAIL}"
             )
         }
         failure {
-            emailext(
-                subject: "FAILED: Frontend Build #${BUILD_NUMBER}",
-                body: """
-FRONTEND BUILD FAILED!
-
-Build Number : ${BUILD_NUMBER}
-Check Logs   : ${BUILD_URL}
-                """,
-                to: "bhautikv03@gmail.com"
+            emailext (
+                subject: "FAILED: Build #${BUILD_NUMBER} - ${JOB_NAME}",
+                body: "Build #${BUILD_NUMBER} failed. Check logs: ${BUILD_URL}",
+                to: "${env.NOTIFY_EMAIL}"
             )
         }
     }
