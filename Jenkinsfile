@@ -20,7 +20,6 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'env-file', variable: 'ENV_FILE')]) {
                     script {
-                        // Sandbox-safe: use sh+grep to extract each variable
                         env.DOCKER_USER_REPO  = sh(script: "grep -m1 ^DOCKER_USER_REPO= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
                         env.DOCKER_CRED_ID    = sh(script: "grep -m1 ^DOCKER_CRED_ID= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
                         env.IMAGE_AUTH        = sh(script: "grep -m1 ^IMAGE_AUTH= \$ENV_FILE | cut -d= -f2-", returnStdout: true).trim()
@@ -86,41 +85,45 @@ pipeline {
             steps {
                 script {
                     echo "Running Trivy vulnerability scan on all images..."
+
+                    // Save images to tar and scan via --input to avoid Docker socket namespace issues
                     sh """
+                        docker save ${env.IMAGE_AUTH}:${env.TAG} -o /tmp/trivy-auth-${env.TAG}.tar
                         docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            -e DOCKER_HOST=unix:///var/run/docker.sock \
+                            -v /tmp:/tmp \
                             aquasec/trivy:latest image \
-                            --image-src docker \
+                            --input /tmp/trivy-auth-${env.TAG}.tar \
                             --severity CRITICAL,HIGH \
                             --no-progress \
                             --exit-code 0 \
-                            --timeout 10m \
-                            ${env.IMAGE_AUTH}:${env.TAG}
+                            --timeout 10m
+                        rm -f /tmp/trivy-auth-${env.TAG}.tar
                     """
+
                     sh """
+                        docker save ${env.IMAGE_PATIENT}:${env.TAG} -o /tmp/trivy-patient-${env.TAG}.tar
                         docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            -e DOCKER_HOST=unix:///var/run/docker.sock \
+                            -v /tmp:/tmp \
                             aquasec/trivy:latest image \
-                            --image-src docker \
+                            --input /tmp/trivy-patient-${env.TAG}.tar \
                             --severity CRITICAL,HIGH \
                             --no-progress \
                             --exit-code 0 \
-                            --timeout 10m \
-                            ${env.IMAGE_PATIENT}:${env.TAG}
+                            --timeout 10m
+                        rm -f /tmp/trivy-patient-${env.TAG}.tar
                     """
+
                     sh """
+                        docker save ${env.IMAGE_FRONTEND}:${env.TAG} -o /tmp/trivy-frontend-${env.TAG}.tar
                         docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            -e DOCKER_HOST=unix:///var/run/docker.sock \
+                            -v /tmp:/tmp \
                             aquasec/trivy:latest image \
-                            --image-src docker \
+                            --input /tmp/trivy-frontend-${env.TAG}.tar \
                             --severity CRITICAL,HIGH \
                             --no-progress \
                             --exit-code 0 \
-                            --timeout 10m \
-                            ${env.IMAGE_FRONTEND}:${env.TAG}
+                            --timeout 10m
+                        rm -f /tmp/trivy-frontend-${env.TAG}.tar
                     """
                 }
             }

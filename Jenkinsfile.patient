@@ -78,14 +78,15 @@ pipeline {
         stage('Trivy Scan') {
             steps {
                 sh """
+                    docker save ${env.IMAGE_PATIENT}:${env.TAG} -o /tmp/trivy-patient-${env.TAG}.tar
                     docker run --rm \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v /tmp:/tmp \
                         aquasec/trivy:latest image \
-                        --image-src docker \
+                        --input /tmp/trivy-patient-${env.TAG}.tar \
                         --severity CRITICAL,HIGH \
                         --no-progress --exit-code 0 \
-                        --timeout 10m \
-                        ${env.IMAGE_PATIENT}:${env.TAG}
+                        --timeout 10m
+                    rm -f /tmp/trivy-patient-${env.TAG}.tar
                 """
             }
         }
