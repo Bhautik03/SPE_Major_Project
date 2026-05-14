@@ -1,19 +1,24 @@
 ---
+# cleanup_services can be overridden via -e to cleanup only specific services.
+# Default: cleanup all services.  Example: -e '{"cleanup_services":["patient-service"]}'
+- name: Set default cleanup_services list
+  set_fact:
+    cleanup_services: "{{ cleanup_services | default(['auth-service', 'patient-service', 'frontend']) }}"
+
+- name: Set cleanup image list
+  set_fact:
+    cleanup_images: "{{ cleanup_services | map('regex_replace', '-service$', '') | list }}"
+
 - name: Remove microservice containers
   community.docker.docker_container:
     name: "{{ item }}"
     state: absent
-  loop:
-    - auth-service
-    - patient-service
-    - frontend
+  loop: "{{ cleanup_services }}"
   ignore_errors: yes
 
 - name: Remove old microservice images
   shell: |
-    docker images "{{ docker_user }}/healthcare-{{ item }}" --format "{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}" | grep -v "{{ tag }}" | xargs -r docker rmi -f
-  loop:
-    - auth
-    - patient
-    - frontend
+    docker images "{{ docker_user }}/healthcare-{{ item }}" --format "{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}" | grep -v "{{ tag }}" | grep -v "latest" | xargs -r docker rmi -f
+  loop: "{{ cleanup_images }}"
   ignore_errors: yes
+

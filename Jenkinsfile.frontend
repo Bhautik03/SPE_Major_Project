@@ -117,7 +117,8 @@ pipeline {
                         ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \\
                           -i ansible/inventory.ini ansible/deploy.yml \\
                           --tags "common,cleanup,frontend" \\
-                          -e "tag=${env.TAG}"
+                          -e "tag=latest" \\
+                          -e '{"cleanup_services":["frontend"]}'
                     """
                 }
             }

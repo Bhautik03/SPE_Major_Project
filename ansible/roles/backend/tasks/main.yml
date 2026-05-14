@@ -1,11 +1,19 @@
 ---
+# deploy_services can be overridden via -e to deploy only specific services.
+# Default: deploy all backend services.  Example: -e '{"deploy_services":["patient"]}'
+- name: Set default deploy_services list
+  set_fact:
+    deploy_services: "{{ deploy_services | default(['auth', 'patient']) }}"
+
 - name: Set facts for backend services
   set_fact:
-    backend_services:
-      - name: auth-service
-        port: 5001
-      - name: patient-service
-        port: 5002
+    backend_services: >-
+      {{
+        [
+          {'name': 'auth-service',    'port': 5001},
+          {'name': 'patient-service', 'port': 5002}
+        ] | selectattr('name', 'match', '^(' + deploy_services | join('|') + ')-service$') | list
+      }}
 
 - name: Pull microservice images
   community.docker.docker_image:

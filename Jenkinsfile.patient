@@ -132,7 +132,9 @@ pipeline {
                       --tags "common,cleanup,backend" \\
                       -e "jwt_secret=${env.JWT_SECRET}" \\
                       -e "google_client_id=${env.GOOGLE_CLIENT_ID}" \\
-                      -e "tag=${env.TAG}"
+                      -e "tag=latest" \\
+                      -e '{"deploy_services":["patient"]}' \\
+                      -e '{"cleanup_services":["patient-service"]}'
                 """
             }
         }
