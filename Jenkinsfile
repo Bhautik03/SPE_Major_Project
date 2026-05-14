@@ -158,19 +158,18 @@ pipeline {
         stage('Cleanup Old Images') {
             steps {
                 script {
-                    echo "Removing old image tags from Jenkins host..."
-                    sh """
-                        docker images "${env.IMAGE_AUTH}" --format "{{.Repository}}:{{.Tag}}" \
-                            | grep -v "${env.TAG}" | grep -v "latest" | xargs -r docker rmi -f || true
-                    """
-                    sh """
-                        docker images "${env.IMAGE_PATIENT}" --format "{{.Repository}}:{{.Tag}}" \
-                            | grep -v "${env.TAG}" | grep -v "latest" | xargs -r docker rmi -f || true
-                    """
-                    sh """
-                        docker images "${env.IMAGE_FRONTEND}" --format "{{.Repository}}:{{.Tag}}" \
-                            | grep -v "${env.TAG}" | grep -v "latest" | xargs -r docker rmi -f || true
-                    """
+                    echo "Removing image tags older than build ${env.TAG}..."
+                    // Only remove tags numerically LOWER than current build to
+                    // avoid deleting tags created by concurrent pipelines.
+                    for (img in [env.IMAGE_AUTH, env.IMAGE_PATIENT, env.IMAGE_FRONTEND]) {
+                        sh """
+                            for t in \$(docker images "${img}" --format '{{.Tag}}' | grep -E '^[0-9]+\$'); do
+                                if [ "\$t" -lt "${env.TAG}" ]; then
+                                    docker rmi -f "${img}:\$t" || true
+                                fi
+                            done
+                        """
+                    }
                 }
             }
         }

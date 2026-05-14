@@ -18,7 +18,11 @@
 
 - name: Remove old microservice images
   shell: |
-    docker images "{{ docker_user }}/healthcare-{{ item }}" --format "{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}" | grep -v "{{ tag }}" | grep -v "latest" | xargs -r docker rmi -f
+    for t in $(docker images "{{ docker_user }}/healthcare-{{ item }}" --format "{% raw %}{{.Tag}}{% endraw %}" | grep -E '^[0-9]+$'); do
+      if [ "$t" -lt "{{ tag }}" ]; then
+        docker rmi -f "{{ docker_user }}/healthcare-{{ item }}:$t" || true
+      fi
+    done
   loop: "{{ cleanup_images }}"
   ignore_errors: yes
 
