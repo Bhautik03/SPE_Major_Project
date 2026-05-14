@@ -55,7 +55,7 @@ docker-volume/
 *.tmp
 *.temp
 
-# Jenkins secret env files (NEVER push to GitHub)
+# Jenkins secret  env files (NEVER push to GitHub)
 .env.jenkins
 .env.jenkins.*
 
