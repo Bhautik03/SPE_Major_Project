@@ -194,13 +194,29 @@ pipeline {
         stage('Deploy via Ansible') {
             steps {
                 script {
-                    echo "Starting Ansible deployment..."
-                    sh """
-                        ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansible/inventory.ini ansible/deploy.yml \
-                        -e "jwt_secret=${env.JWT_SECRET}" \
-                        -e "google_client_id=${env.GOOGLE_CLIENT_ID}" \
-                        -e "tag=${env.TAG}"
-                    """
+                    echo "Starting Ansible deployment for build #${env.TAG}..."
+                    try {
+                        sh """
+                            ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansible/inventory.ini ansible/deploy.yml \
+                            -e "jwt_secret=${env.JWT_SECRET}" \
+                            -e "google_client_id=${env.GOOGLE_CLIENT_ID}" \
+                            -e "tag=${env.TAG}"
+                        """
+                        echo "Deployment of build #${env.TAG} successful!"
+                    } catch (err) {
+                        def rollbackTag = (env.TAG.toInteger() - 1).toString()
+                        echo "Deployment FAILED! Rolling back to previous build #${rollbackTag}..."
+                        sh """
+                            ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansible/inventory.ini ansible/deploy.yml \
+                            -e "jwt_secret=${env.JWT_SECRET}" \
+                            -e "google_client_id=${env.GOOGLE_CLIENT_ID}" \
+                            -e "tag=${rollbackTag}"
+                        """
+                        echo "Rollback to build #${rollbackTag} completed successfully."
+                        // Mark the build as unstable (not failure) so the rollback is visible
+                        currentBuild.result = 'UNSTABLE'
+                        error("Build #${env.TAG} deployment failed — rolled back to build #${rollbackTag}.")
+                    }
                 }
             }
         }
