@@ -24,7 +24,7 @@ pipeline {
             printPostContent: true,
             silentResponse: false,
             regexpFilterText: '$MODIFIED_FILES $ADDED_FILES $REMOVED_FILES',
-            regexpFilterExpression: '.*(auth-service|Jenkinsfile|docker-compose\.yml|ansible)/.*'
+            regexpFilterExpression: '.*(auth-service|Jenkinsfile|docker-compose[.]yml|ansible)/.*'
         )
     }
 
