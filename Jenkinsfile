@@ -11,6 +11,23 @@ pipeline {
         TAG = "${BUILD_NUMBER}"
     }
 
+    triggers {
+        GenericTrigger(
+            genericVariables: [
+                [key: 'MODIFIED_FILES', value: '$.commits[*].modified[*]'],
+                [key: 'ADDED_FILES',    value: '$.commits[*].added[*]'],
+                [key: 'REMOVED_FILES',  value: '$.commits[*].removed[*]']
+            ],
+            causeString: 'Triggered by auth-service or infra changes',
+            token: 'main-pipeline-token',
+            printContributedVariables: true,
+            printPostContent: true,
+            silentResponse: false,
+            regexpFilterText: '$MODIFIED_FILES $ADDED_FILES $REMOVED_FILES',
+            regexpFilterExpression: '.*(auth-service|Jenkinsfile|docker-compose\.yml|ansible)/.*'
+        )
+    }
+
     stages {
         stage('Checkout Code') {
             steps {

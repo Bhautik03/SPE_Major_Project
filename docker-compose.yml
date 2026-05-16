@@ -244,6 +244,23 @@ services:
       timeout: 10s
       retries: 10
 
+  # ── Filebeat (Log Collector) ──────────────────
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.13.0
+    container_name: healthcare-filebeat
+    restart: unless-stopped
+    user: root
+    volumes:
+      - ./k8s/elk/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - elk-network
+    command: ["--strict.perms=false"]
+
   # ──────────────────────────────────────────────
   #  MONITORING: Prometheus + Grafana
   # ──────────────────────────────────────────────

@@ -2,9 +2,23 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const client = require('prom-client');
+const winston = require('winston');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
+
+// ── Winston Logger (JSON to stdout → Filebeat → ELK) ──
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  defaultMeta: { service: 'auth-service' },
+  transports: [
+    new winston.transports.Console(),
+  ],
+});
 
 // ── Prometheus Metrics ────────────────────────
 const register = new client.Registry();
@@ -30,21 +44,27 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Middleware to track request metrics
+// Middleware to track request metrics + logging
 app.use((req, res, next) => {
   const end = httpRequestDuration.startTimer();
   res.on('finish', () => {
     const route = req.route ? req.route.path : req.path;
     end({ method: req.method, route, status_code: res.statusCode });
     httpRequestsTotal.inc({ method: req.method, route, status_code: res.statusCode });
+    logger.info('HTTP Request', {
+      method: req.method,
+      route,
+      status: res.statusCode,
+      ip: req.ip,
+    });
   });
   next();
 });
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Auth Service connected to MongoDB'))
-  .catch(err => console.error('MongoDB connection error:', err));
+  .then(() => logger.info('Auth Service connected to MongoDB'))
+  .catch(err => logger.error('MongoDB connection error', { error: err.message }));
 
 // Routes
 app.use('/auth', authRoutes);
@@ -61,7 +81,8 @@ app.get('/metrics', async (req, res) => {
 
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
-  console.log(`Auth Service running on port ${PORT}`);
+  logger.info(`Auth Service running on port ${PORT}`);
 });
 
 module.exports = app;
+

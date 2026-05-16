@@ -1,6 +1,6 @@
 ---
 # cleanup_services can be overridden via -e to cleanup only specific services.
-# Default: cleanup all services.  Example: -e '{"cleanup_services":["patient-service"]}'
+# Default: cleanup all services.  Example: -e '{"cleanup_services":["frontend"]}'
 - name: Set default cleanup_services list
   set_fact:
     cleanup_services: "{{ cleanup_services | default(['auth-service', 'patient-service', 'frontend']) }}"
@@ -9,9 +9,18 @@
   set_fact:
     cleanup_images: "{{ cleanup_services | map('regex_replace', '-service$', '') | list }}"
 
-- name: Remove microservice containers
+# Remove Ansible-managed containers (plain names: auth-service, patient-service, frontend)
+- name: Remove Ansible-managed microservice containers
   community.docker.docker_container:
     name: "{{ item }}"
+    state: absent
+  loop: "{{ cleanup_services }}"
+  ignore_errors: yes
+
+# Also remove docker-compose managed containers (prefixed: healthcare-auth, healthcare-patient, healthcare-frontend)
+- name: Remove docker-compose managed microservice containers
+  community.docker.docker_container:
+    name: "healthcare-{{ item | regex_replace('-service$', '') }}"
     state: absent
   loop: "{{ cleanup_services }}"
   ignore_errors: yes
@@ -25,4 +34,3 @@
     done
   loop: "{{ cleanup_images }}"
   ignore_errors: yes
-

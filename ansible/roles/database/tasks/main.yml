@@ -1,4 +1,17 @@
 ---
+# Stop docker-compose managed MongoDB/Redis before Ansible tries to bind the same ports
+- name: Stop docker-compose managed MongoDB (if running)
+  community.docker.docker_container:
+    name: healthcare-mongodb
+    state: absent
+  ignore_errors: yes
+
+- name: Stop docker-compose managed Redis (if running)
+  community.docker.docker_container:
+    name: healthcare-redis
+    state: absent
+  ignore_errors: yes
+
 - name: Run MongoDB container
   community.docker.docker_container:
     name: mongodb
@@ -9,3 +22,4 @@
       - "27017:27017"
     restart_policy: always
     state: started
+    recreate: yes
